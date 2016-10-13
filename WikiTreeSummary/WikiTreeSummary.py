@@ -112,10 +112,17 @@ class EventNote:
         self.event = event
         self.db = db
         self.citations=[]
+        self.description = event.get_description()
         for cite in event.get_citation_list():
             citation = summary.add_citation(cite)
             if citation is not None:
                 self.citations.append(citation)
+
+    def get_type(self):
+        return self.event.get_type()
+
+    def get_description(self):
+        return self.event.get_description()
 
     def format(self, event_str):
         '''
@@ -170,18 +177,21 @@ class WikiTreeSummary:
             self.given = name_displayer.display_given(person)
 
         families = person.get_family_handle_list()
-        for event in [db.get_event_from_handle(h)
-                     for h in [ref.ref for ref in person.get_event_ref_list()]]:
+        for event_ref in person.get_event_ref_list():
+            event = self.db.get_event_from_handle(event_ref.ref)
             event_note = EventNote(db, event, self)
             if event.type == EventType.BIRTH:
                 self.birth = event_note
             elif event.type == EventType.DEATH:
                 self.death = event_note
             else:
-                self.other_events.append(EventNote(db, event, self))
+                role = event_ref.get_role()
+                self.other_events.append([role, EventNote(db, event, self)])
         self.pronoun = _('He')
+        self.possessive = _('His')
         if person.get_gender() == person.FEMALE:
             self.pronoun = _('She')
+            self.possessive = _('Her')
 
         for family in families:
             marriage = self.create_marriage_event(family)
@@ -269,6 +279,17 @@ class WikiTreeSummary:
                                                         pp=self.pronoun,
                                                         gn=self.given,
                                                         d_str=death_str))
+        for role, event in self.other_events:
+            type = glocale.get_type(event.get_type())
+            desc = event.get_description()
+            if role == 'Primary':
+                event_str = _('{pp} {type} was').format(pp=self.possessive,
+                                                        type=type)
+            else:
+                event_str = _('{pp} did {role} in {type} {desc}')
+                event_str = event_str.format(pp=self.pronoun, role=role,
+                                             type=type, desc=desc)
+            sdoc.paragraph(event.format(event_str))
 
 def run(db, doc, person):
     '''
