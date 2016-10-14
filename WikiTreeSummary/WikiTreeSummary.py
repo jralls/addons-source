@@ -18,8 +18,8 @@
 # Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #
 
-from gramps.gen.lib import (Person, Family, Event, EventType, Source, Place,
-                            Citation, Note, Date, Tag)
+from gramps.gen.lib import (Person, Family, Event, EventRoleType, EventType,
+                            Source, Place, Citation, Note, NoteType, Date, Tag)
 from gramps.gen.datehandler import displayer as date_displayer
 from gramps.gen.display.name import displayer as name_displayer
 from gramps.gen.display.place import displayer as place_displayer
@@ -282,7 +282,7 @@ class WikiTreeSummary:
         for role, event in self.other_events:
             type = glocale.get_type(event.get_type())
             desc = event.get_description()
-            if role == 'Primary':
+            if role in (EventRoleType.PRIMARY, EventRoleType.FAMILY):
                 event_str = _('{pp} {type} was').format(pp=self.possessive,
                                                         type=type)
             else:
