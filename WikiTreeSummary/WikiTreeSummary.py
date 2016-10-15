@@ -98,6 +98,22 @@ class CitationNote:
             retval = '<ref name={id}/>'.format(id=self.cite.get_gramps_id())
         return retval
 
+class NoteNote:
+    def __init__(self, db, note):
+        if not note:
+            return None
+        if isinstance(note, str):
+            try:
+                note = db.get_note_from_handle(note)
+                if not note:
+                    return None
+            except HandleError:
+                return None
+        self.note = note
+
+    def format(self):
+        return self.note.get()
+
 class EventNote:
     def __init__(self, db, event, summary):
         if not event:
@@ -111,12 +127,18 @@ class EventNote:
                 raise RunTimeError("Invalid Event Handle.")
         self.event = event
         self.db = db
-        self.citations=[]
+        self.citations = []
+        self.notes = []
         self.description = event.get_description()
         for cite in event.get_citation_list():
             citation = summary.add_citation(cite)
             if citation is not None:
                 self.citations.append(citation)
+
+        for note_h in event.get_note_list():
+            note = NoteNote(db, note_h)
+            if note is not None:
+                self.notes.append(note)
 
     def get_type(self):
         return self.event.get_type()
@@ -148,6 +170,9 @@ class EventNote:
                                                                 e_place=place)
         for source in self.citations:
             retval += source.format()
+        # Translation note: The single quotes are for wiki
+        # markup. Include them in your msgstr.
+        retval += '\n'.join([_("'Note: {_note}'").format(_note=note.format()) for note in self.notes])
 
         return retval
 
@@ -172,6 +197,7 @@ class WikiTreeSummary:
         self.death = None
         self.marriages = []
         self.other_events = []
+        self.notes = []
         if person.primary_name:
             self.name = name_displayer.display(person)
             self.given = name_displayer.display_given(person)
@@ -197,6 +223,12 @@ class WikiTreeSummary:
             marriage = self.create_marriage_event(family)
             if marriage:
                 self.marriages.append(marriage)
+
+        for note_h in self.person.get_note_list():
+            note = NoteNote(db, note_h)
+            if note is not None:
+                self.notes.append(note)
+
 
     def add_citation(self, cite):
         '''
@@ -290,6 +322,14 @@ class WikiTreeSummary:
                 event_str = event_str.format(pp=self.pronoun, role=role,
                                              type=type, desc=desc)
             sdoc.paragraph(event.format(event_str))
+
+        if self.notes:
+            sdoc.paragraph('')
+            sdoc.paragraph('=== NOTES ===')
+            sdoc.paragraph('')
+            for note in self.notes:
+                sdoc.paragraph(note.format())
+                sdoc.paragraph('')
 
 def run(db, doc, person):
     '''
