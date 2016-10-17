@@ -182,7 +182,6 @@ def find_event(event_list, type):
         return None
     return events[0]
 
-class WikiTreeSummary:
 def get_person_name(db, person):
     if person is None:
         return 'unknown'
@@ -197,29 +196,38 @@ def get_person_name(db, person):
     if person_name is None:
         return 'unknown'
     return name_displayer.display_name(person_name)
+
+class PersonNote:
     '''
-    Master class that collects the elements and formats the report.
+    Class to accumulate events about a person and to format the results.
     '''
-    def __init__(self, db, person):
-        self.db = db
-        self.name = 'unknown'
-        self.given = 'unknown'
+    def __init__(self, db, person, summary):
         self.person = person
-        self.sources = dict()
-        self.citations = dict()
         self.birth = None
         self.death = None
-        self.marriages = []
-        self.other_events = []
-        self.notes = []
+        self.name = 'unknown'
+        self.given = 'unknown'
+        self.db = db
+
         if person.primary_name:
             self.name = name_displayer.display(person)
             self.given = name_displayer.display_given(person)
         self.set_pronouns()
+        parent_family = person.get_main_parents_family_handle()
+        if parent_family:
+            try:
+                parent_family = self.db.get_family_from_handle(parent_family)
+            except HandleError:
+                parent_family = None
+            if parent_family:
                 self.father = get_person_name(self.db,
                                               parent_family.get_father_handle())
                 self.mother = get_person_name(self.db,
                                               parent_family.get_mother_handle())
+            else:
+                self.father = _('unknown')
+                self.mother = _('unknown')
+
     def set_pronouns(self):
         if self.person.get_gender() == self.person.FEMALE:
             self.pronounuc = _('She')
@@ -238,20 +246,48 @@ def get_person_name(db, person):
             self.father = 'unknown'
             self.mother = 'unknown'
 
-        families = person.get_family_handle_list()
-        for event_ref in person.get_event_ref_list():
+    def get_name(self):
+        return name_displayer.display(self.person)
+
+    def format(self):
+        if self.birth:
+            b_str = self.birth.format_date(_('Birth Abbreviation|b.'))
+        else:
+            b_str = _('Birth Abbreviation|b.unknown')
+        if self.death:
+            d_str = self.death.format_date(_('Death Abbreviation|d.'))
+        else:
+            d_str = _('Death Abbreviation|d.unknown')
+
+        if self.father == 'unknown' and self.mother == 'unknown':
+            parents = 'parents unknown'
+        else:
+            parents = _('{child} of {father} and {mother}').format(
+                child=self.typelc, father= self.father, mother= self.mother)
+        return _('{name}({parents} {birth} {death})').format(
+            name=name_displayer.display(self.person), parents=parents,
+            birth=b_str, death=d_str)
+
+class SubjectNote(PersonNote):
+    def __init__(self, db, subject, summary):
+        super().__init__(db, subject, summary)
+        self.marriages = []
+        self.other_events = []
+        self.notes = []
+        for event_ref in self.person.get_event_ref_list():
             event = self.db.get_event_from_handle(event_ref.ref)
-            event_note = EventNote(db, event, self)
+            event_note = EventNote(db, event, summary)
             if event.type == EventType.BIRTH:
                 self.birth = event_note
             elif event.type == EventType.DEATH:
                 self.death = event_note
             else:
                 role = event_ref.get_role()
-                self.other_events.append([role, EventNote(db, event, self)])
+                self.other_events.append([role, EventNote(db, event, summary)])
+        families = self.person.get_family_handle_list()
 
         for family in families:
-            marriage = self.create_marriage_event(family)
+            marriage = self.create_marriage_event(family, summary)
             if marriage:
                 self.marriages.append(marriage)
 
@@ -260,6 +296,85 @@ def get_person_name(db, person):
             if note is not None:
                 self.notes.append(note)
 
+    def create_marriage_event(self, family_handle, summary):
+        try:
+            family = self.db.get_family_from_handle(family_handle)
+            if family is None:
+                return None # No family, no marriage.
+            father_h = family.get_father_handle()
+            mother_h = family.get_mother_handle()
+            if mother_h is None or father_h is None:
+                return None # No marriage if there arent' two spouses.
+            father = self.db.get_person_from_handle(father_h)
+            mother = self.db.get_person_from_handle(mother_h)
+            if father is None or mother is None:
+                return None # One's a bad handle, bail out.
+        except HandleError:
+            return
+
+        if father == self.person:
+            spouse = PersonNote(self.db, mother, summary)
+        else:
+            spouse = PersonNote(self.db, father, summary)
+
+        family_events = [self.db.get_event_from_handle(h)
+                         for h in [ref.ref for ref in family.get_event_ref_list()]]
+        marriage = find_event(family_events, EventType.MARRIAGE)
+        if marriage:
+            return spouse, EventNote(self.db, marriage, summary)
+
+    def format(self, sdoc):
+        if self.birth:
+            birth_str = self.birth.format(_('was born'))
+        else:
+            birth_str = _(' birth date and place are unknown')
+
+        if self.marriages:
+            marriage_str = self.pronounuc + _(' married ') + ', '.join([m.format('{s_name}'.format(s_name=s.format())) for s,m in self.marriages])
+        else:
+            marriage_str = _(' had no known marriages')
+
+        if self.death:
+            death_str = self.death.format(_('died'))
+        else:
+            death_str = _(' death date and place are unknown')
+
+        sdoc.paragraph(_(
+            '{name} {b_str}.{pp} {m_str}.{gn}{d_str}').format(name=self.name,
+                                                        b_str=birth_str,
+                                                        m_str=marriage_str,
+                                                        pp=self.pronounuc,
+                                                        gn=self.given,
+                                                        d_str=death_str))
+        for role, event in self.other_events:
+            type = glocale.get_type(event.get_type())
+            desc = event.get_description()
+            if role in (EventRoleType.PRIMARY, EventRoleType.FAMILY):
+                event_str = _('{pp} {type} was').format(pp=self.possessiveuc,
+                                                        type=type)
+            else:
+                event_str = _('{pp} did {role} in {type} {desc}')
+                event_str = event_str.format(pp=self.pronounuc, role=role,
+                                             type=type, desc=desc)
+            sdoc.paragraph(event.format(event_str))
+
+        if self.notes:
+            sdoc.paragraph('')
+            sdoc.paragraph('=== NOTES ===')
+            sdoc.paragraph('')
+            for note in self.notes:
+                sdoc.paragraph(note.format())
+                sdoc.paragraph('')
+
+class WikiTreeSummary:
+    '''
+    Master class that collects the elements and formats the report.
+    '''
+    def __init__(self, db, person):
+        self.db = db
+        self.sources = dict()
+        self.citations = dict()
+        self.subject = SubjectNote(self.db, person, self)
 
     def add_citation(self, cite):
         '''
@@ -293,74 +408,11 @@ def get_person_name(db, person):
             return self.citations[citeid]
         return None
 
-    def create_marriage_event(self, family_handle):
-        try:
-            family = self.db.get_family_from_handle(family_handle)
-            if family is None:
-                return None # No family, no marriage.
-            father_h = family.get_father_handle()
-            mother_h = family.get_mother_handle()
-            if mother_h is None or father_h is None:
-                return None # No marriage if there arent' two spouses.
-            father = self.db.get_person_from_handle(father_h)
-            mother = self.db.get_person_from_handle(mother_h)
-            if father is None or mother is None:
-                return None # One's a bad handle, bail out.
-        except HandleError:
-            return
-        spouse = father
-        if father == self.person:
-            spouse = mother
-        family_events = [self.db.get_event_from_handle(h)
-                         for h in [ref.ref for ref in family.get_event_ref_list()]]
-        marriage = find_event(family_events, EventType.MARRIAGE)
-        if marriage:
-            return spouse, EventNote(self.db, marriage, self)
-
     def format(self, sdoc):
-        if self.birth:
-            birth_str = self.birth.format(_('was born'))
-        else:
-            birth_str = _(' birth date and place are unknown')
 
-        if self.marriages:
-            marriage_str = self.pronounuc + _(' married ') + ', '.join([m.format('{s_name}'.format(s_name=s.format())) for s,m in self.marriages])
-        else:
-            marriage_str = _(' had no known marriages')
-
-        if self.death:
-            death_str = self.death.format(_('died'))
-        else:
-            death_str = _(' death date and place are unknown')
-
-        sdoc.title(_('WikiTree Summary for {name}').format(name=self.name))
+        sdoc.title(_('WikiTree Summary for {name}').format(name=self.subject.get_name()))
         sdoc.paragraph("")
-        sdoc.paragraph(_(
-            '{name} {b_str}.{pp} {m_str}.{gn}{d_str}').format(name=self.name,
-                                                        b_str=birth_str,
-                                                        m_str=marriage_str,
-                                                        pp=self.pronounuc,
-                                                        gn=self.given,
-                                                        d_str=death_str))
-        for role, event in self.other_events:
-            type = glocale.get_type(event.get_type())
-            desc = event.get_description()
-            if role in (EventRoleType.PRIMARY, EventRoleType.FAMILY):
-                event_str = _('{pp} {type} was').format(pp=self.possessiveuc,
-                                                        type=type)
-            else:
-                event_str = _('{pp} did {role} in {type} {desc}')
-                event_str = event_str.format(pp=self.pronounuc, role=role,
-                                             type=type, desc=desc)
-            sdoc.paragraph(event.format(event_str))
-
-        if self.notes:
-            sdoc.paragraph('')
-            sdoc.paragraph('=== NOTES ===')
-            sdoc.paragraph('')
-            for note in self.notes:
-                sdoc.paragraph(note.format())
-                sdoc.paragraph('')
+        self.subject.format(sdoc)
 
 def run(db, doc, person):
     '''
