@@ -213,20 +213,6 @@ class PersonNote:
             self.name = name_displayer.display(person)
             self.given = name_displayer.display_given(person)
         self.set_pronouns()
-        parent_family = person.get_main_parents_family_handle()
-        if parent_family:
-            try:
-                parent_family = self.db.get_family_from_handle(parent_family)
-            except HandleError:
-                parent_family = None
-            if parent_family:
-                self.father = get_person_name(self.db,
-                                              parent_family.get_father_handle())
-                self.mother = get_person_name(self.db,
-                                              parent_family.get_mother_handle())
-            else:
-                self.father = _('unknown')
-                self.mother = _('unknown')
 
     def set_pronouns(self):
         if self.person.get_gender() == self.person.FEMALE:
@@ -256,15 +242,8 @@ class PersonNote:
             d_str = self.death.format_date(_('Death Abbreviation|d.'))
         else:
             d_str = _('Death Abbreviation|d.unknown')
-
-        if self.father == 'unknown' and self.mother == 'unknown':
-            parents = 'parents unknown'
-        else:
-            parents = _('{child} of {father} and {mother}').format(
-                child=self.typelc, father= self.father, mother= self.mother)
-        return _('{name}({parents} {birth} {death})').format(
-            name=name_displayer.display(self.person), parents=parents,
-            birth=b_str, death=d_str)
+        return _('{name} ({birth}, {death})').format(name=self.get_name(),
+                                                     birth=b_str, death=d_str)
 
 class SubjectNote(PersonNote):
     def __init__(self, db, subject, summary):
