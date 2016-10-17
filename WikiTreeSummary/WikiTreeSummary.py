@@ -183,6 +183,20 @@ def find_event(event_list, type):
     return events[0]
 
 class WikiTreeSummary:
+def get_person_name(db, person):
+    if person is None:
+        return 'unknown'
+    if isinstance(person, str):
+        try:
+            person = db.get_person_from_handle(person)
+        except HandleError:
+            return 'unknown'
+    if person is None:
+        return 'unknown'
+    person_name = person.get_primary_name()
+    if person_name is None:
+        return 'unknown'
+    return name_displayer.display_name(person_name)
     '''
     Master class that collects the elements and formats the report.
     '''
@@ -202,6 +216,10 @@ class WikiTreeSummary:
             self.name = name_displayer.display(person)
             self.given = name_displayer.display_given(person)
         self.set_pronouns()
+                self.father = get_person_name(self.db,
+                                              parent_family.get_father_handle())
+                self.mother = get_person_name(self.db,
+                                              parent_family.get_mother_handle())
     def set_pronouns(self):
         if self.person.get_gender() == self.person.FEMALE:
             self.pronounuc = _('She')
