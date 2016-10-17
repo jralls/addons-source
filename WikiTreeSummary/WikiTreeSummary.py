@@ -201,6 +201,24 @@ class WikiTreeSummary:
         if person.primary_name:
             self.name = name_displayer.display(person)
             self.given = name_displayer.display_given(person)
+        self.set_pronouns()
+    def set_pronouns(self):
+        if self.person.get_gender() == self.person.FEMALE:
+            self.pronounuc = _('She')
+            self.possessiveuc = _('Her')
+            self.typeuc = _('Daughter')
+            self.pronounlc = _('she')
+            self.possessivelc = _('her')
+            self.typelc = _('daughter')
+        else:
+            self.pronounuc = _('He')
+            self.possessiveuc = _('His')
+            self.typeuc = _('Son')
+            self.pronounlc = _('he')
+            self.possessivelc = _('his')
+            self.typelc = _('son')
+            self.father = 'unknown'
+            self.mother = 'unknown'
 
         families = person.get_family_handle_list()
         for event_ref in person.get_event_ref_list():
@@ -213,11 +231,6 @@ class WikiTreeSummary:
             else:
                 role = event_ref.get_role()
                 self.other_events.append([role, EventNote(db, event, self)])
-        self.pronoun = _('He')
-        self.possessive = _('His')
-        if person.get_gender() == person.FEMALE:
-            self.pronoun = _('She')
-            self.possessive = _('Her')
 
         for family in families:
             marriage = self.create_marriage_event(family)
@@ -293,7 +306,7 @@ class WikiTreeSummary:
             birth_str = _(' birth date and place are unknown')
 
         if self.marriages:
-            marriage_str = self.pronoun + _(' married ') + ', '.join([m.format('{s_name}'.format(s_name=name_displayer.display(s))) for s,m in self.marriages])
+            marriage_str = self.pronounuc + _(' married ') + ', '.join([m.format('{s_name}'.format(s_name=s.format())) for s,m in self.marriages])
         else:
             marriage_str = _(' had no known marriages')
 
@@ -308,18 +321,18 @@ class WikiTreeSummary:
             '{name} {b_str}.{pp} {m_str}.{gn}{d_str}').format(name=self.name,
                                                         b_str=birth_str,
                                                         m_str=marriage_str,
-                                                        pp=self.pronoun,
+                                                        pp=self.pronounuc,
                                                         gn=self.given,
                                                         d_str=death_str))
         for role, event in self.other_events:
             type = glocale.get_type(event.get_type())
             desc = event.get_description()
             if role in (EventRoleType.PRIMARY, EventRoleType.FAMILY):
-                event_str = _('{pp} {type} was').format(pp=self.possessive,
+                event_str = _('{pp} {type} was').format(pp=self.possessiveuc,
                                                         type=type)
             else:
                 event_str = _('{pp} did {role} in {type} {desc}')
-                event_str = event_str.format(pp=self.pronoun, role=role,
+                event_str = event_str.format(pp=self.pronounuc, role=role,
                                              type=type, desc=desc)
             sdoc.paragraph(event.format(event_str))
 
