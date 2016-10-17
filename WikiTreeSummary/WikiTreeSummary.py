@@ -177,6 +177,24 @@ class EventNote:
 
         return retval
 
+    def format_date(self, event_str):
+        '''
+        Create a string describing an event with source.
+        '''
+        retval = ''
+        date = 'unknown'
+        place = 'unknown'
+        date_obj = self.event.get_date_object()
+        place_h = self.event.get_place_handle()
+        if date_obj:
+            date = date_displayer.display(date_obj)
+
+        retval = _(' {e_str}{e_date}').format(e_str=event_str, e_date=date)
+        for source in self.citations:
+            retval += source.format()
+
+        return retval
+
 def find_event(event_list, type):
     events = [e for e in event_list if e.type == type]
     if not events:
@@ -209,11 +227,22 @@ class PersonNote:
         self.name = 'unknown'
         self.given = 'unknown'
         self.db = db
+        self.other_events = []
 
         if person.primary_name:
             self.name = name_displayer.display(person)
             self.given = name_displayer.display_given(person)
         self.set_pronouns()
+        for event_ref in self.person.get_event_ref_list():
+            event = self.db.get_event_from_handle(event_ref.ref)
+            event_note = EventNote(db, event, summary)
+            if event.type == EventType.BIRTH:
+                self.birth = event_note
+            elif event.type == EventType.DEATH:
+                self.death = event_note
+            else:
+                role = event_ref.get_role()
+                self.other_events.append([role, EventNote(db, event, summary)])
 
     def set_pronouns(self):
         if self.person.get_gender() == self.person.FEMALE:
@@ -250,18 +279,7 @@ class SubjectNote(PersonNote):
     def __init__(self, db, subject, summary):
         super().__init__(db, subject, summary)
         self.marriages = []
-        self.other_events = []
         self.notes = []
-        for event_ref in self.person.get_event_ref_list():
-            event = self.db.get_event_from_handle(event_ref.ref)
-            event_note = EventNote(db, event, summary)
-            if event.type == EventType.BIRTH:
-                self.birth = event_note
-            elif event.type == EventType.DEATH:
-                self.death = event_note
-            else:
-                role = event_ref.get_role()
-                self.other_events.append([role, EventNote(db, event, summary)])
         families = self.person.get_family_handle_list()
 
         for family in families:
