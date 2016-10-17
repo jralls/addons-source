@@ -305,20 +305,20 @@ class SubjectNote(PersonNote):
         if self.birth:
             birth_str = self.birth.format(_('was born'))
         else:
-            birth_str = _(' birth date and place are unknown')
+            birth_str = _(' birth date and place are unknown.')
 
         if self.marriages:
             marriage_str = self.pronounuc + _(' married ') + ', '.join([m.format('{s_name}'.format(s_name=s.format())) for s,m in self.marriages])
         else:
-            marriage_str = _(' had no known marriages')
+            marriage_str = _(' had no known marriages.')
 
         if self.death:
             death_str = self.death.format(_('died'))
         else:
-            death_str = _(' death date and place are unknown')
+            death_str = _(' death date and place are unknown.')
 
         sdoc.paragraph(_(
-            '{name} {b_str}.{pp} {m_str}.{gn}{d_str}').format(name=self.name,
+            '{name} {b_str}.{m_str} {gn}{d_str}').format(name=self.name,
                                                         b_str=birth_str,
                                                         m_str=marriage_str,
                                                         pp=self.pronounuc,
