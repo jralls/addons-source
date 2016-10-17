@@ -291,9 +291,9 @@ class SubjectNote(PersonNote):
             return
 
         if father == self.person:
-            spouse = PersonNote(self.db, mother, summary)
+            spouse = SpouseNote(self.db, mother, summary)
         else:
-            spouse = PersonNote(self.db, father, summary)
+            spouse = SpouseNote(self.db, father, summary)
 
         family_events = [self.db.get_event_from_handle(h)
                          for h in [ref.ref for ref in family.get_event_ref_list()]]
@@ -344,6 +344,42 @@ class SubjectNote(PersonNote):
                 sdoc.paragraph(note.format())
                 sdoc.paragraph('')
 
+class SpouseNote(PersonNote):
+    def __init__(self, db, person, summary):
+        super().__init__(db, person, summary)
+        parent_family = person.get_main_parents_family_handle()
+        if parent_family:
+            try:
+                parent_family = self.db.get_family_from_handle(parent_family)
+            except HandleError:
+                parent_family = None
+            if parent_family:
+                self.father = get_person_name(self.db,
+                                              parent_family.get_father_handle())
+                self.mother = get_person_name(self.db,
+                                              parent_family.get_mother_handle())
+            else:
+                self.father = _('unknown')
+                self.mother = _('unknown')
+
+    def format(self):
+        if self.birth:
+            b_str = self.birth.format_date(S_('Birth Abbreviation|b.'))
+        else:
+            b_str = S_('Birth Abbreviation|b.unknown')
+        if self.death:
+            d_str = self.death.format_date(S_('Death Abbreviation|d.'))
+        else:
+            d_str = S_('Death Abbreviation|d.unknown')
+
+        if self.father == 'unknown' and self.mother == 'unknown':
+            parents = 'parents unknown'
+        else:
+            parents = _('{child} of {father} and {mother}').format(
+                child=self.typelc, father= self.father, mother= self.mother)
+        return _('{name}({parents} {birth} {death})').format(
+            name=name_displayer.display(self.person), parents=parents,
+            birth=b_str, death=d_str)
 class WikiTreeSummary:
     '''
     Master class that collects the elements and formats the report.
