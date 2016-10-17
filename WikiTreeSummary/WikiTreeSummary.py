@@ -243,8 +243,6 @@ class PersonNote:
             self.pronounlc = _('he')
             self.possessivelc = _('his')
             self.typelc = _('son')
-            self.father = 'unknown'
-            self.mother = 'unknown'
 
     def get_name(self):
         return name_displayer.display(self.person)
