@@ -27,6 +27,7 @@ from gramps.gen.simple import SimpleDoc
 from gramps.version import VERSION_TUPLE
 from gramps.gen.const import GRAMPS_LOCALE as glocale
 _ = glocale.translation.gettext
+S_ = glocale.translation.sgettext
 
 if VERSION_TUPLE[0] < 5:
     class HandleError(Exception):
@@ -235,13 +236,13 @@ class PersonNote:
 
     def format(self):
         if self.birth:
-            b_str = self.birth.format_date(_('Birth Abbreviation|b.'))
+            b_str = self.birth.format_date(S_('Birth Abbreviation|b.'))
         else:
-            b_str = _('Birth Abbreviation|b.unknown')
+            b_str = S_('Birth Abbreviation|b.unknown')
         if self.death:
             d_str = self.death.format_date(_('Death Abbreviation|d.'))
         else:
-            d_str = _('Death Abbreviation|d.unknown')
+            d_str = S_('Death Abbreviation|d.unknown')
         return _('{name} ({birth}, {death})').format(name=self.get_name(),
                                                      birth=b_str, death=d_str)
 
