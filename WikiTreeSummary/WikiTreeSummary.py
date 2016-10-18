@@ -279,6 +279,7 @@ class SubjectNote(PersonNote):
     def __init__(self, db, subject, summary):
         super().__init__(db, subject, summary)
         self.marriages = []
+        self.children = dict()
         self.notes = []
         families = self.person.get_family_handle_list()
 
@@ -315,6 +316,11 @@ class SubjectNote(PersonNote):
 
         family_events = [self.db.get_event_from_handle(h)
                          for h in [ref.ref for ref in family.get_event_ref_list()]]
+        kidrefs = family.get_child_ref_list()
+        if kidrefs:
+            self.children[spouse] = [ChildNote(self.db, kidref, summary)
+                                     for kidref in kidrefs]
+
         marriage = find_event(family_events, EventType.MARRIAGE)
         if marriage:
             return spouse, EventNote(self.db, marriage, summary)
@@ -353,7 +359,22 @@ class SubjectNote(PersonNote):
                 event_str = event_str.format(pp=self.pronounuc, role=role,
                                              type=type, desc=desc)
             sdoc.paragraph(event.format(event_str))
-
+        if self.children:
+            sdoc.paragraph('')
+            sdoc.paragraph('=== CHILDREN ===')
+            for spouse, marriage in self.marriages:
+                if self.children[spouse]:
+                    sdoc.paragraph(
+                        _('{pname} and {sname} had the following children:').format(
+                            pname=self.given,sname=spouse.name))
+                    for child in self.children[spouse]:
+                        sdoc.paragraph(_('::{child}').format(child=child.format()))
+                else:
+                    sdoc.paragraph(_('{pname} and {sname} had no known children.').format(pname=self.given,sname=spouse.name))
+        else:
+            sdoc.paragraph('')
+            sdoc.paragraph(_('{pname} had no known children').format(pname=self.given))
+            sdoc.paragraph('')
         if self.notes:
             sdoc.paragraph('')
             sdoc.paragraph('=== NOTES ===')
@@ -398,6 +419,71 @@ class SpouseNote(PersonNote):
         return _('{name}({parents} {birth} {death})').format(
             name=name_displayer.display(self.person), parents=parents,
             birth=b_str, death=d_str)
+
+class ChildNote(PersonNote):
+    def __init__(self, db, kidref, summary):
+        person = None
+        try:
+            person = db.get_person_from_handle(kidref.ref)
+            if person == None:
+                return
+        except HandleError:
+            return
+        super().__init__(db, person, summary)
+        self.spouses = []
+        self.citations = []
+        families = self.person.get_family_handle_list()
+        [self.get_spouse(family, summary) for family in families]
+        self.citations = [summary.add_citation(cite)
+                          for cite in kidref.get_citation_list()]
+
+    def get_spouse(self, family_handle, summary):
+        self.spouse = None
+        self.marriage = None
+        try:
+            family = self.db.get_family_from_handle(family_handle)
+            if family is None:
+                return # No family, no marriage.
+            father_h = family.get_father_handle()
+            mother_h = family.get_mother_handle()
+            if mother_h is None or father_h is None:
+                return # No marriage if there arent' two spouses.
+            father = self.db.get_person_from_handle(father_h)
+            mother = self.db.get_person_from_handle(mother_h)
+            if father is None or mother is None:
+                return # One's a bad handle, bail out.
+        except HandleError:
+            return
+
+        if father == self.person:
+            self.spouses.append(name_displayer.display(mother))
+        else:
+            self.spouses.append(name_displayer.display(father))
+
+
+    def format(self):
+        if self.birth:
+            b_str = self.birth.format_date(S_('Birth Abbreviation|b.'))
+        else:
+            b_str = S_('Birth Abbreviation|b.unknown')
+        if self.death:
+            d_str = self.death.format_date(S_('Death Abbreviation|d.'))
+        else:
+            d_str = S_('Death Abbreviation|d.unknown')
+
+        if self.spouses:
+            retval = _('{name}({birth} {death} m.{married})').format(
+                name=name_displayer.display(self.person), birth=b_str,
+                death=d_str, married=','.join(self.spouses))
+        else:
+            retval = _('{name}({birth} {death})').format(
+                name=name_displayer.display(self.person), birth=b_str,
+                death=d_str)
+        for source in self.citations:
+            retval += source.format()
+
+        return retval
+
 class WikiTreeSummary:
     '''
     Master class that collects the elements and formats the report.
